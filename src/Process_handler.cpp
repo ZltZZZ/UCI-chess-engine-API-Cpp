@@ -3,10 +3,10 @@
 #include "Process_handler.h"
 #include <ctime>
 #ifdef DEBUG_IN_PROCESS_HANDLER
-#include <stdio.h>
+#include <iostream>
 #endif // DEBUG_IN_PROCESS_HANDLER
 
-error_process create_process(LPCWSTR path, HANDLE* pipe_in_w, HANDLE* pipe_out_r) {
+error_process create_process(std::wstring path, HANDLE* pipe_in_w, HANDLE* pipe_out_r) {
     PROCESS_INFORMATION pi;
     STARTUPINFO si;
     SECURITY_ATTRIBUTES saAttr;
@@ -38,7 +38,7 @@ error_process create_process(LPCWSTR path, HANDLE* pipe_in_w, HANDLE* pipe_out_r
 
     // Start the child process. 
     if (!CreateProcess(
-        path,           // Module name
+        path.c_str(),           // Module name
         NULL,           // No Command line
         NULL,           // Process handle not inheritable
         NULL,           // Thread handle not inheritable
@@ -68,19 +68,22 @@ void close_stream_handle(HANDLE* stream) {
     if (stream != NULL) CloseHandle(*stream);
 }
 
-void wait_for_answ(HANDLE* pipe_out_r) {
+error_process wait_for_answ(HANDLE* pipe_out_r) {
     DWORD bites_aval = 0;     // Bites availible in pipe's buffer
     time_t time_start, time_curr;   // Avoid infinite loop by setting a waiting timer
 
-    time(&time_start);
-    time(&time_curr);
+    time_start = clock();
+    time_curr = clock();
 
     // Busy waits msg (block curr thread)
-    while (bites_aval <= 0 && difftime(time_curr, time_start) < WAITING_TIME)
+    while (bites_aval <= 0 && (time_curr - time_start) / 1000.0 < WAITING_TIME)
     {
         PeekNamedPipe(*pipe_out_r, NULL, NULL, NULL, &bites_aval, NULL);
-        time(&time_curr);
+        time_curr = clock();
     }
+
+    if ((time_curr - time_start) / 1000.0 >= WAITING_TIME) return PROCESS_TIMEOUT;
+    else return PROCESS_OK;
 }
 
 void send_message(HANDLE* pipe_in_w, const char msg[MAX_MSG_SIZE]) {
@@ -92,7 +95,7 @@ void send_message(HANDLE* pipe_in_w, const char msg[MAX_MSG_SIZE]) {
 void recieve_message(HANDLE* pipe_out_r, char* buff) {
     DWORD dwRead;
 
-    ReadFile(*pipe_out_r, buff, MAX_MSG_SIZE, &dwRead, NULL);
+    ReadFile(*pipe_out_r, buff, MAX_MSG_SIZE - 1, &dwRead, NULL);
 }
 
 void recieve_char(HANDLE* pipe_out_r, char* c_buff) {

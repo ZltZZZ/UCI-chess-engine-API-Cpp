@@ -1,23 +1,26 @@
 #include <Windows.h>
+#include <string>
 
 #define MAX_MSG_SIZE 1500
 #define WAITING_TIME 10
 
 typedef enum _error_process {
+	PROCESS_OK,
 	PROCESS_CREATE_OK,
 	PROCESS_CREATE_FAIL,
 	PROCESS_PIPE_MSG_AVAILABLE,
-	PROCESS_PIPE_NO_MSG
+	PROCESS_PIPE_NO_MSG,
+	PROCESS_TIMEOUT
 } error_process;
 
 /* Creates standart process for engine */
-error_process create_process(LPCWSTR path, HANDLE* pipe_in_w, HANDLE* pipe_out_r);
+error_process create_process(std::wstring path, HANDLE* pipe_in_w, HANDLE* pipe_out_r);
 
 /* Closes stream description*/
 void close_stream_handle(HANDLE* stream);
 
 /* Block curr process untill child process answers*/
-void wait_for_answ(HANDLE* pipe_out_r);
+error_process wait_for_answ(HANDLE* pipe_out_r);
 
 /* Send message to pipe */
 void send_message(HANDLE* pipe_in_w, const char msg[MAX_MSG_SIZE]);
