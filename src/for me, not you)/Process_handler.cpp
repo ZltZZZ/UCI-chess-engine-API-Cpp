@@ -1,10 +1,5 @@
-//#define DEBUG_IN_PROCESS_HANDLER
-
 #include "Process_handler.h"
 #include <ctime>
-#ifdef DEBUG_IN_PROCESS_HANDLER
-#include <iostream>
-#endif // DEBUG_IN_PROCESS_HANDLER
 
 error_process create_process(std::wstring path, HANDLE* pipe_in_w, HANDLE* pipe_out_r) {
     PROCESS_INFORMATION pi;
@@ -83,6 +78,24 @@ error_process wait_for_answ(HANDLE* pipe_out_r) {
     }
 
     if ((time_curr - time_start) / 1000.0 >= WAITING_TIME) return PROCESS_TIMEOUT;
+    else return PROCESS_OK;
+}
+
+error_process wait_for_answ(HANDLE* pipe_out_r, int w_time_ms) {
+    DWORD bites_aval = 0;     // Bites availible in pipe's buffer
+    time_t time_start, time_curr;   // Avoid infinite loop by setting a waiting timer
+
+    time_start = clock();
+    time_curr = clock();
+
+    // Busy waits msg (block curr thread)
+    while (bites_aval <= 0 && (time_curr - time_start) / 1000.0 < w_time_ms)
+    {
+        PeekNamedPipe(*pipe_out_r, NULL, NULL, NULL, &bites_aval, NULL);
+        time_curr = clock();
+    }
+
+    if ((time_curr - time_start) / 1000.0 >= w_time_ms) return PROCESS_TIMEOUT;
     else return PROCESS_OK;
 }
 

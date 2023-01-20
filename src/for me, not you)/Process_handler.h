@@ -21,6 +21,7 @@ void close_stream_handle(HANDLE* stream);
 
 /* Block curr process untill child process answers*/
 error_process wait_for_answ(HANDLE* pipe_out_r);
+error_process wait_for_answ(HANDLE* pipe_out_r, int w_time_ms);
 
 /* Send message to pipe */
 void send_message(HANDLE* pipe_in_w, const char msg[MAX_MSG_SIZE]);

@@ -1,7 +1,5 @@
 #include "Engine_handler.h"
-#include <string.h>
 #include <string>
-#include <stdarg.h>
 #include <typeinfo>
 
 engine_error UCI_Engine::load()
@@ -18,7 +16,7 @@ engine_error UCI_Engine::load()
 
 void UCI_Engine::close()
 {
-	this->send_command(COMMAND_TYPE_PASSTHROUGH, _quit);
+	this->send_command(_quit);
 	close_stream_handle(&this->pipe_in_w);
 	close_stream_handle(&this->pipe_out_r);
 	this->pipe_in_w = NULL;
@@ -29,6 +27,11 @@ void UCI_Engine::close()
 engine_error UCI_Engine::wait_answ()
 {
 	if (wait_for_answ(&this->pipe_out_r) == PROCESS_OK) return ENGINE_OK;
+	else return ENGINE_TIMEOUT;
+}
+
+engine_error UCI_Engine::wait_answ(int wait_time_ms) {
+	if (wait_for_answ(&this->pipe_out_r, wait_time_ms) == PROCESS_OK) return ENGINE_OK;
 	else return ENGINE_TIMEOUT;
 }
 

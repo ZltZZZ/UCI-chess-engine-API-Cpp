@@ -1,25 +1,55 @@
 #pragma once
 
-#define WTIME_DEF 1000
-#define BTIME_DEF 1000
-#define WINC_DEF 1000
-#define BINC_DEF 1000
-#define MOVESTOGO_DEF 1000
-#define DEPTH_DEF 1000
-#define NODES_DEF 1000
-#define MATE_DEF 1000
-#define MOVETIME_DEF 1000
-
-#include "Process_handler.h"
-
+#include <Windows.h>
 #include <string>
-#include <type_traits>
 #include <sstream>
+#include <typeinfo>
+#include <ctime>
 
+#define MAX_MSG_SIZE 1500
+#define WAITING_TIME 10
+
+/*-----------------------Process_handler----------------------*/
+typedef enum _error_process {
+	PROCESS_OK,
+	PROCESS_CREATE_OK,
+	PROCESS_CREATE_FAIL,
+	PROCESS_PIPE_MSG_AVAILABLE,
+	PROCESS_PIPE_NO_MSG,
+	PROCESS_TIMEOUT
+} error_process;
+
+/* Creates standart process for engine */
+error_process create_process(std::wstring path, HANDLE* pipe_in_w, HANDLE* pipe_out_r);
+
+/* Closes stream description*/
+void close_stream_handle(HANDLE* stream);
+
+/* Block curr process untill child process answers*/
+error_process wait_for_answ(HANDLE* pipe_out_r);
+error_process wait_for_answ(HANDLE* pipe_out_r, int w_time_ms);
+
+/* Send message to pipe */
+void send_message(HANDLE* pipe_in_w, const char msg[MAX_MSG_SIZE]);
+
+/* Recieve message from pipe. Msg places in buff */
+void recieve_message(HANDLE* pipe_out_r, char* buff);
+
+/* Recieve a char from pipe. Char places in a c_buff. */
+void recieve_char(HANDLE* pipe_out_r, char* c_buff);
+
+/* Returns PROCESS_PIPE_MSG_AVAILABLE if pipe is note empty, overwise PROCESS_PIPE_NO_MSG. */
+error_process check_pipe(HANDLE* pipe_out_r);
+
+/* Recieve all massages from pipe (clean pipe). */
+void clean_pipe_out(HANDLE* pipe_out_r);
+/*--------------------------------------------------------------*/
+
+
+/*-----------------------Engine_handler-------------------------*/
 typedef enum _engine_state {
 	NOT_LOADED,
 	WORKING,
-	THINKING
 } engine_state;
 
 typedef enum _engine_error {
@@ -30,81 +60,48 @@ typedef enum _engine_error {
 	ENGINE_TIMEOUT
 } engine_error;
 
-typedef enum _engine_command_type {
-	COMMAND_TYPE_PASSTHROUGH, // Send command without response
-	COMMAND_TYPE_GET_ANSW     // Send command and wait for answer
-} engine_command_type;
-
 typedef enum _engine_command_word {
 	_uci,
 	_debug, _on, _off,
 	_isready,
-	_setoption, 
-		_name, 
-		_value,
-	_register, 
-		_later, 
-		_code,
+	_setoption,
+	_name,
+	_value,
+	_register,
+	_later,
+	_code,
 	_ucinewgame,
-	_position, 
-		_fen, 
-		_startpos, 
-		_moves,
-	_go, 
-		_searchmoves, 
-		_ponder, 
-		_wtime, 
-		_btime, 
-		_winc, 
-		_binc, 
-		_movestogo, 
-		_depth,
-		_nodes,
-		_mate,
-		_movetime,
-		_infinite,
+	_position,
+	_fen,
+	_startpos,
+	_moves,
+	_go,
+	_searchmoves,
+	_ponder,
+	_wtime,
+	_btime,
+	_winc,
+	_binc,
+	_movestogo,
+	_depth,
+	_nodes,
+	_mate,
+	_movetime,
+	_infinite,
 	_stop,
 	_ponderhit,
 	_quit,
-	_CUSTOM
 } engine_command_word;
 
 class UCI_Engine {
 public:
 	std::wstring path_to_engine{ L"" };     // Full path to engine.exe
-	int wtime		{ WTIME_DEF },			// Common 'go' parameters
-		btime		{ BTIME_DEF },
-		winc		{ WINC_DEF },
-		binc		{ BINC_DEF },
-		movestogo	{ MOVESTOGO_DEF },
-		depth		{ DEPTH_DEF },
-		nodes		{ NODES_DEF },
-		mate		{ MATE_DEF },
-		movetime	{ MOVETIME_DEF };
 
 	UCI_Engine() {}
 
-	UCI_Engine(std::wstring path_to_engine_in,
-		int wtime_opt = WTIME_DEF,
-		int btime_opt = BTIME_DEF,
-		int winc_opt = WINC_DEF,
-		int binc_opt = BINC_DEF,
-		int movestogo_opt = MOVESTOGO_DEF,
-		int depth_opt = DEPTH_DEF,
-		int nodes_opt = NODES_DEF,
-		int mate_opt = MATE_DEF,
-		int movetime_opt = MOVETIME_DEF
-		) {
+	UCI_Engine(std::wstring path_to_engine_in
+	) {
 		path_to_engine = path_to_engine_in;
-		wtime = wtime_opt;
-		btime = btime_opt;
-		winc = winc_opt;
-		binc = binc_opt;
-		movestogo = movestogo_opt;
-		depth = depth_opt;
-		nodes = nodes_opt;
-		mate = mate_opt;
-		movetime = movetime_opt;
 
 		pipe_in_w = NULL;
 		pipe_out_r = NULL;
@@ -117,44 +114,44 @@ public:
 	/* Closes cless_engine.exe */
 	void close();
 
-	/* Send common (or custom) command (ONLY 1) to engine in the following format (example): 
-		send_command (COMMAND_TYPE_PASSTHROUGH (or COMMAND_TYPE_GET_ANSW),
+	/* Send command to engine in the following format (example):
+		send_command (
 					  _uci,
 					  (or) _debug, _on (or _off),
 					  (or) _setoption, _name, (int)<id>, (or _value, (int)<x>,)
 					  (or) ...(and other from specification of UCI interface)
 					 );
 	*/
-
 	template<typename Command, typename... Other>
-	engine_error send_command(engine_command_type command_type, Command word, Other... args);
+	engine_error send_command(Command word, Other... args);
 
-	/* Busy waits for answer WAITING_TIME secons. Returns 
-	ENGINE_OK, if engine answers, 
+	/* Busy waits for answer WAITING_TIME secons (or int ms). Returns
+	ENGINE_OK, if engine answers,
 	ENGINE_TIMEOUT, if time exceeded. */
 	engine_error wait_answ();
+	engine_error wait_answ(int);
 
 	/* Returns true, if some message from engine is available, else false.*/
 	bool check_answ();
 
-	/* Return row answer (string) of engine (max MAX_MSG_SIZE bytes). It can return empty string, if engine didn't answer. 
+	/* Return row answer (string) of engine (max MAX_MSG_SIZE/int bytes). It can return empty string, if engine didn't answer.
 	Recommended to call this func after check_answ() returns true (or wait_answ()). */
 	std::string get_answ_string();
 
-	/* Returns row answer (one char) of engine. 
+	/* Returns row answer (one char) of engine.
 	Recommended to call this func after check_answ() returns true (or wait_answ()). */
 	char get_answ_char();
 
-	/* Returs engine state. 
+	/* Returs engine state.
 	NOT_LOADED if chess_engine.exe didn't work,
 	WORKING if chess_engine.exe simply waits for comands (do nothing),
 	THINKING if chess_engine.exe analysing. */
 	engine_state get_state();
 
 private:
-	HANDLE pipe_in_w		{ NULL };       // Used by app to send msg to engine
-	HANDLE pipe_out_r		{ NULL };       // Used by app to recieve msg from engine
-	engine_state state		{ NOT_LOADED }; // Current state of engine (working or not and so on)
+	HANDLE pipe_in_w{ NULL };       // Used by app to send msg to engine
+	HANDLE pipe_out_r{ NULL };       // Used by app to recieve msg from engine
+	engine_state state{ NOT_LOADED }; // Current state of engine (working or not and so on)
 };
 
 /* Returns std::string command, that was build from words. */
@@ -167,7 +164,7 @@ std::string get_command_string(Command word)
 
 	if (typeid(Command) == typeid(std::string)
 		|| typeid(Command) == typeid(const char*) || typeid(Command) == typeid(char*)
-		|| typeid(Command) == typeid(int)) {
+		|| typeid(Command) == typeid(int) || typeid(Command) == typeid(float)) {
 		return command;
 	}
 	else
@@ -220,9 +217,12 @@ std::string get_command_string(Command word, Other... args)
 }
 
 template<typename Command, typename... Other>
-engine_error UCI_Engine::send_command(engine_command_type command_type, Command word, Other... args) {
-	std::string command = get_command_string(word, args...); command.append("\n");
+engine_error UCI_Engine::send_command(Command word, Other... args) {
+	std::string command = get_command_string(word, args...);
 	size_t pos = 0;
+
+	// Add '\n' at the end of the command
+	if (command.size() > 0 && command[command.size() - 1] != '\n') command.append("\n");
 
 	// Check string for error
 	pos = command.find("INVALID_COMMAND");
@@ -230,18 +230,8 @@ engine_error UCI_Engine::send_command(engine_command_type command_type, Command 
 		return ENGINE_INCORRECT_COMMAND;
 	}
 
-	// Send command to Engine
-	if (command_type == COMMAND_TYPE_PASSTHROUGH) { // Don't wait for response
-		send_message(&this->pipe_in_w, command.c_str());
-	}
-	else if (command_type == COMMAND_TYPE_GET_ANSW) { // Wait for response
-		send_message(&this->pipe_in_w, command.c_str());
-		if (wait_for_answ(&this->pipe_out_r) == PROCESS_OK) return ENGINE_OK;
-		else return ENGINE_TIMEOUT;
-	}
-	else {
-		return ENGINE_INCORRECT_COMMAND_TYPE;
-	}
+	send_message(&this->pipe_in_w, command.c_str());
 
 	return ENGINE_OK;
 }
+/*-------------------------------------------------------------*/
